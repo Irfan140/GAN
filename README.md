@@ -12,7 +12,7 @@ This repo contains a complete DCGAN workflow:
 
 - **Training notebook** (`04_GAN_implementation.ipynb`) — dataset loading, model definitions, weight initialization, the adversarial training loop, and loss/sample visualization.
 - **Reusable model code** (`model.py`) — the exact `Generator` and `Discriminator` architectures used for training, plus a checkpoint loader.
-- **Inference script** (`inferance.py`) — loads the trained weights, samples 16 digits in a 4×4 grid, and optionally scores them with the discriminator.
+- **Inference script** (`inferance.py`) — loads the trained weights, samples 16 digits in a 4×4 grid, and optionally scores them with the discriminator. It creates `output/` on demand and resolves its paths relative to the script, so it runs from any directory.
 - **Pre-trained checkpoints** — `generator.pth` and `discriminator.pth`, ready to use without retraining.
 - **Training animation** — `dcgan_training.gif`, generated from snapshots taken during training.
 
@@ -53,6 +53,10 @@ GAN/
 ├── inferance.py                  # Inference / sampling script
 ├── generator.pth                 # Trained generator weights (~14 MB)
 ├── discriminator.pth             # Trained discriminator weights (~11 MB)
+├── weights/                      # Checkpoint layout expected by inferance.py
+│   ├── generator.pth
+│   └── discriminator.pth
+├── output/                       # Generated grids (created at runtime)
 ├── dcgan_training.gif            # Training progress animation
 ├── pyproject.toml                # Project metadata and dependencies (uv)
 ├── uv.lock                       # Locked dependency versions
@@ -80,12 +84,12 @@ uv sync
 
 `inferance.py` loads the generator, samples 16 random latent vectors (seed 42), saves them as a 4×4 grid, and prints the discriminator's mean score for the fakes.
 
-The script expects the checkpoints under `weights/` and writes its output to `output/`, so create both directories and copy the weights first:
+The script reads the checkpoints from `weights/` and creates `output/` itself, so only the weights need to be put in place:
 
 **PowerShell (Windows)**
 
 ```powershell
-New-Item -ItemType Directory -Force weights, output | Out-Null
+New-Item -ItemType Directory -Force weights | Out-Null
 Copy-Item generator.pth, discriminator.pth weights\
 uv run inferance.py
 ```
@@ -93,12 +97,12 @@ uv run inferance.py
 **bash (Linux / macOS / Git Bash)**
 
 ```bash
-mkdir -p weights output
+mkdir -p weights
 cp generator.pth discriminator.pth weights/
 uv run inferance.py
 ```
 
-> Alternatively, edit the two checkpoint paths at the top of `inferance.py` to point at the `.pth` files in the repo root.
+> `inferance.py` resolves `WEIGHTS_DIR` and `OUTPUT_DIR` relative to its own location, so it works regardless of the directory you launch it from. Point `WEIGHTS_DIR` elsewhere if your checkpoints live outside `weights/`.
 
 Output:
 
@@ -107,10 +111,10 @@ Generator loaded
 Discriminator loaded
 Discriminator score for fake images (0 = fake, 1 = real):
 Mean score: 0.xxxx
-Saved to output/generated.png
+Saved to <repo>/output/generated.png
 ```
 
-The generated grid is written to `output/generated.png` and also displayed with Matplotlib. Inference runs on CPU, so no GPU is required.
+The generated grid is written to `output/generated.png` — the folder is created automatically on first run — and also displayed with Matplotlib. Inference runs on CPU, so no GPU is required.
 
 ## Training
 
@@ -145,6 +149,7 @@ The **Save the progress as GIF** cell assembles the stored sample grids into `dc
 - The trained checkpoints are tied to the notebook's architecture and 64×64 input size.
 - `load_weights()` in `model.py` tolerates both plain state dicts and checkpoints saved with a `DataParallel` `module.` prefix.
 - Generated images use `Tanh` output in the range `[-1, 1]`; they are normalized for display and saving.
+- `inferance.py` builds its paths from `BASE_DIR = Path(__file__).resolve().parent` and calls `OUTPUT_DIR.mkdir(parents=True, exist_ok=True)` before saving, so it never fails on a missing `output/` folder.
 
 ## Author
 
