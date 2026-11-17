@@ -10,10 +10,10 @@ A from-scratch PyTorch implementation of a **Deep Convolutional Generative Adver
 
 This repo contains a complete DCGAN workflow:
 
-- **Training notebook** (`04_GAN_implementation.ipynb`) — dataset loading, model definitions, weight initialization, the adversarial training loop, and loss/sample visualization.
+- **Training notebook** (`GAN_implementation.ipynb`) — dataset loading, model definitions, weight initialization, the adversarial training loop, and loss/sample visualization.
 - **Reusable model code** (`model.py`) — the exact `Generator` and `Discriminator` architectures used for training, plus a checkpoint loader.
 - **Inference script** (`inferance.py`) — loads the trained weights, samples 16 digits in a 4×4 grid, and optionally scores them with the discriminator. It creates `output/` on demand and resolves its paths relative to the script, so it runs from any directory.
-- **Pre-trained checkpoints** — `generator.pth` and `discriminator.pth`, ready to use without retraining.
+- **Pre-trained checkpoints** — `weights/generator.pth` and `weights/discriminator.pth`, ready to use without retraining.
 - **Training animation** — `dcgan_training.gif`, generated from snapshots taken during training.
 
 The generator maps a 100-dimensional latent vector to a 1×64×64 image. The discriminator is a convolutional classifier trained to tell real MNIST digits from generated ones. Both networks are trained together using binary cross-entropy and the two-player minimax objective.
@@ -48,14 +48,12 @@ The generator maps a 100-dimensional latent vector to a 1×64×64 image. The dis
 
 ```text
 GAN/
-├── 04_GAN_implementation.ipynb   # Training notebook (MNIST + DCGAN)
+├── GAN_implementation.ipynb      # Training notebook (MNIST + DCGAN)
 ├── model.py                      # Generator, Discriminator, load_weights
 ├── inferance.py                  # Inference / sampling script
-├── generator.pth                 # Trained generator weights (~14 MB)
-├── discriminator.pth             # Trained discriminator weights (~11 MB)
-├── weights/                      # Checkpoint layout expected by inferance.py
-│   ├── generator.pth
-│   └── discriminator.pth
+├── weights/                      # Checkpoints used by inferance.py
+│   ├── generator.pth             # Trained generator weights (~14 MB)
+│   └── discriminator.pth         # Trained discriminator weights (~11 MB)
 ├── output/                       # Generated grids (created at runtime)
 ├── dcgan_training.gif            # Training progress animation
 ├── pyproject.toml                # Project metadata and dependencies (uv)
@@ -84,21 +82,9 @@ uv sync
 
 `inferance.py` loads the generator, samples 16 random latent vectors (seed 42), saves them as a 4×4 grid, and prints the discriminator's mean score for the fakes.
 
-The script reads the checkpoints from `weights/` and creates `output/` itself, so only the weights need to be put in place:
-
-**PowerShell (Windows)**
-
-```powershell
-New-Item -ItemType Directory -Force weights | Out-Null
-Copy-Item generator.pth, discriminator.pth weights\
-uv run inferance.py
-```
-
-**bash (Linux / macOS / Git Bash)**
+The checkpoints are committed under `weights/`, and `inferance.py` creates `output/` itself, so there is nothing to set up:
 
 ```bash
-mkdir -p weights
-cp generator.pth discriminator.pth weights/
 uv run inferance.py
 ```
 
@@ -118,7 +104,7 @@ The generated grid is written to `output/generated.png` — the folder is create
 
 ## Training
 
-Open `04_GAN_implementation.ipynb` in Jupyter, JupyterLab, or Google Colab and run all cells. MNIST is downloaded automatically to `./data`.
+Open `GAN_implementation.ipynb` in Jupyter, JupyterLab, or Google Colab and run all cells. MNIST is downloaded automatically to `./data`.
 
 The notebook was trained on a Colab T4 GPU. `CUDA` is set to `False` in the configuration cell by default; set it to `True` (together with a CUDA-enabled PyTorch install) to train on GPU.
 
