@@ -12,7 +12,7 @@ This repo contains a complete DCGAN workflow:
 
 - **Training notebook** (`GAN_implementation.ipynb`) — dataset loading, model definitions, weight initialization, the adversarial training loop, and loss/sample visualization.
 - **Reusable model code** (`model.py`) — the exact `Generator` and `Discriminator` architectures used for training, plus a checkpoint loader.
-- **Inference script** (`inferance.py`) — loads the trained weights, samples 16 digits in a 4×4 grid, and optionally scores them with the discriminator. It creates `output/` on demand and resolves its paths relative to the script, so it runs from any directory.
+- **Inference script** (`inference.py`) — loads the trained weights, samples 16 digits in a 4×4 grid, and optionally scores them with the discriminator. It creates `output/` on demand and resolves its paths relative to the script, so it runs from any directory.
 - **Pre-trained checkpoints** — `weights/generator.pth` and `weights/discriminator.pth`, ready to use without retraining.
 - **Training animation** — `dcgan_training.gif`, generated from snapshots taken during training.
 
@@ -50,8 +50,8 @@ The generator maps a 100-dimensional latent vector to a 1×64×64 image. The dis
 GAN/
 ├── GAN_implementation.ipynb      # Training notebook (MNIST + DCGAN)
 ├── model.py                      # Generator, Discriminator, load_weights
-├── inferance.py                  # Inference / sampling script
-├── weights/                      # Checkpoints used by inferance.py
+├── inference.py                  # Inference / sampling script
+├── weights/                      # Checkpoints used by inference.py
 │   ├── generator.pth             # Trained generator weights (~14 MB)
 │   └── discriminator.pth         # Trained discriminator weights (~11 MB)
 ├── output/                       # Generated grids (created at runtime)
@@ -80,15 +80,15 @@ uv sync
 
 ## Generating images
 
-`inferance.py` loads the generator, samples 16 random latent vectors (seed 42), saves them as a 4×4 grid, and prints the discriminator's mean score for the fakes.
+`inference.py` loads the generator, samples 16 random latent vectors (seed 42), saves them as a 4×4 grid, and prints the discriminator's mean score for the fakes.
 
-The checkpoints are committed under `weights/`, and `inferance.py` creates `output/` itself, so there is nothing to set up:
+The checkpoints are committed under `weights/`, and `inference.py` creates `output/` itself, so there is nothing to set up:
 
 ```bash
-uv run inferance.py
+uv run inference.py
 ```
 
-> `inferance.py` resolves `WEIGHTS_DIR` and `OUTPUT_DIR` relative to its own location, so it works regardless of the directory you launch it from. Point `WEIGHTS_DIR` elsewhere if your checkpoints live outside `weights/`.
+> `inference.py` resolves `WEIGHTS_DIR` and `OUTPUT_DIR` relative to its own location, so it works regardless of the directory you launch it from. Point `WEIGHTS_DIR` elsewhere if your checkpoints live outside `weights/`.
 
 Output:
 
@@ -135,7 +135,7 @@ The **Save the progress as GIF** cell assembles the stored sample grids into `dc
 - The trained checkpoints are tied to the notebook's architecture and 64×64 input size.
 - `load_weights()` in `model.py` tolerates both plain state dicts and checkpoints saved with a `DataParallel` `module.` prefix.
 - Generated images use `Tanh` output in the range `[-1, 1]`; they are normalized for display and saving.
-- `inferance.py` builds its paths from `BASE_DIR = Path(__file__).resolve().parent` and calls `OUTPUT_DIR.mkdir(parents=True, exist_ok=True)` before saving, so it never fails on a missing `output/` folder.
+- `inference.py` builds its paths from `BASE_DIR = Path(__file__).resolve().parent` and calls `OUTPUT_DIR.mkdir(parents=True, exist_ok=True)` before saving, so it never fails on a missing `output/` folder.
 
 ## Author
 
