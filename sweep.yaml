@@ -1,0 +1,27 @@
+# Weights & Biases sweep for train.py
+#
+# Run with:
+#   uv run train.py --sweep-config sweep.yaml --sweep-count 8 --wandb-project gan-dcgan
+#
+# Every trial starts from the CLI defaults in train.py and overrides only the
+# parameters sampled here. The objective is the mean G loss over the last 100
+# iterations, reported as run summary "final/loss_G".
+
+method: bayes
+metric:
+  name: final/loss_G
+  goal: minimize
+
+parameters:
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-4
+    max: 4.0e-4
+  beta1:
+    values: [0.0, 0.5]
+  batch_size:
+    values: [64, 128, 256]
+  epochs:
+    value: 10
+  seed:
+    value: 1

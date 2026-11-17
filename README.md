@@ -51,10 +51,26 @@ GAN/
 ├── GAN_implementation.ipynb      # Training notebook (MNIST + DCGAN)
 ├── model.py                      # Generator, Discriminator, load_weights
 ├── inference.py                  # Inference / sampling script
+├── train.py                      # Thin CLI entry point -> dcgan/
+├── dcgan/                        # Training package
+│   ├── cli.py                    # Orchestrates a run (single run or sweep)
+│   ├── config.py                 # Config dataclass, argument parsing, W&B overrides
+│   ├── runtime.py                # Device selection, seeding, cudnn
+│   ├── data.py                   # MNIST DataLoader (workers, pinning, prefetch)
+│   ├── training.py               # The adversarial training loop
+│   ├── checkpoint.py             # Save / load / resume
+│   ├── tracking.py               # Weights & Biases helpers
+│   ├── sweep.py                  # W&B sweep agent
+│   ├── artifacts.py              # Weights, loss curve, history.json
+│   ├── paths.py                  # Repo-relative defaults
+│   └── state.py                  # History container
+├── sweep.yaml                    # W&B hyperparameter sweep definition
+├── kaggle/                       # `kaggle kernels push` entry point (T4 GPU)
 ├── weights/                      # Checkpoints used by inference.py
 │   ├── generator.pth             # Trained generator weights (~14 MB)
 │   └── discriminator.pth         # Trained discriminator weights (~11 MB)
-├── output/                       # Generated grids (created at runtime)
+├── output/                       # Generated grids and training artifacts (runtime)
+├── checkpoints/                  # Resumable .pt files (runtime)
 ├── dcgan_training.gif            # Training progress animation
 ├── pyproject.toml                # Project metadata and dependencies (uv)
 ├── uv.lock                       # Locked dependency versions
@@ -108,6 +124,56 @@ Open `GAN_implementation.ipynb` in Jupyter, JupyterLab, or Google Colab and run 
 
 The notebook was trained on a Colab T4 GPU. `CUDA` is set to `False` in the configuration cell by default; set it to `True` (together with a CUDA-enabled PyTorch install) to train on GPU.
 
+### Training from the command line
+
+`train.py` is a thin entry point over the `dcgan/` package — a headless version of the notebook with the same defaults, importing the architectures from `model.py`:
+
+```bash
+uv run train.py                                # 5 epochs, batch 128, seed 1
+uv run train.py --epochs 20 --device cuda      # longer run on a GPU
+uv run train.py --resume                       # continue from checkpoints/latest.pt
+```
+
+It writes `weights/generator.pth` and `weights/discriminator.pth` (exactly what `inference.py` loads), sample grids to `output/training/samples/`, a loss curve to `output/training/loss_curve.png`, per-iteration losses to `output/training/history.json`, and resumable state to `checkpoints/`.
+
+What it adds on top of the notebook:
+
+- **Mixed precision** — `--amp` (on by default) uses fp16 autocast plus a gradient scaler on CUDA, typically 1.5–2× faster than fp32 on a T4. Ignored on CPU.
+- **Parallel data loading** — `--num-workers` (use `4` on Kaggle) with pinned memory, persistent workers, and 2-batch prefetching.
+- **Checkpointing** — `latest.pt` every `--checkpoint-every` batches (default 500) and `epoch_XXX.pt` at every epoch boundary. Each file holds both networks, both Adam states, the AMP scaler, RNG state, and the loss history, so `--resume` picks up at the exact batch.
+- **Experiment tracking** — `--wandb-project NAME` logs losses, sample images, and final metrics to Weights & Biases; `sweep.yaml` defines a Bayesian hyperparameter search.
+
+> Training with the defaults overwrites `weights/*.pth`. Use `--weights-dir` and `--output-dir` to keep experiments apart.
+
+### Training on Kaggle (T4)
+
+`kaggle/` contains a push-ready script kernel that clones this repo, installs `wandb`, and trains on the T4 with `/kaggle/working` as the output root:
+
+```bash
+# Requires ~/.kaggle/kaggle.json (your Kaggle API token)
+kaggle kernels push -p kaggle
+kaggle kernels status irfan140/gan-dcgan-training
+kaggle kernels output irfan140/gan-dcgan-training -p kaggle-output
+```
+
+Add `WANDB_API_KEY` under **Add-ons → Secrets** in the notebook settings; `train.py` reads it via `kaggle_secrets` (or the `WANDB_API_KEY` environment variable) automatically.
+
+Kaggle sessions are capped (9 h CPU, 12 h GPU). Since checkpoints are written under `/kaggle/working/checkpoints`, a run that hits the limit can continue later: download that folder, attach it as a Kaggle dataset, and add
+
+```python
+"--resume", "/kaggle/input/<dataset>/latest.pt"
+```
+
+to `ARGS` in `kaggle/train_kernel.py`.
+
+### Hyperparameter tuning with W&B
+
+```bash
+uv run train.py --sweep-config sweep.yaml --sweep-count 8 --wandb-project gan-dcgan
+```
+
+The agent searches `lr` (log-uniform 1e-4–4e-4), `beta1` (0 or 0.5), and `batch_size` (64/128/256) for 10 epochs per trial, ranking runs by `final/loss_G` — the mean generator loss over the last 100 iterations. Every trial writes to `output/training/trial_<id>/`, so checkpoints and samples never collide. The same command works on Kaggle once `WANDB_API_KEY` is available.
+
 ### Training hyperparameters
 
 | Parameter | Value |
@@ -124,7 +190,7 @@ The notebook was trained on a Colab T4 GPU. `CUDA` is set to `False` in the conf
 | Weight init | Conv: `N(0, 0.02)`, BatchNorm: `N(1, 0.02)`, bias `0` |
 | Seed | 1 |
 
-During training the notebook logs `Loss_D`, `Loss_G`, `D(x)`, and `D(G(z))` every 50 iterations, stores a fixed-noise sample grid every 500 iterations, and plots real vs. generated images at the end.
+During training the notebook logs `Loss_D`, `Loss_G`, `D(x)`, and `D(G(z))` every 50 iterations, stores a fixed-noise sample grid every 500 iterations, and plots real vs. generated images at the end. `train.py` logs the same values every `--log-every` batches and saves the grids and loss curve to disk instead of plotting interactively.
 
 ### Recreating the GIF
 
@@ -136,6 +202,7 @@ The **Save the progress as GIF** cell assembles the stored sample grids into `dc
 - `load_weights()` in `model.py` tolerates both plain state dicts and checkpoints saved with a `DataParallel` `module.` prefix.
 - Generated images use `Tanh` output in the range `[-1, 1]`; they are normalized for display and saving.
 - `inference.py` builds its paths from `BASE_DIR = Path(__file__).resolve().parent` and calls `OUTPUT_DIR.mkdir(parents=True, exist_ok=True)` before saving, so it never fails on a missing `output/` folder.
+- `train.py` trains on a single GPU (`cuda:0`). The D and G updates are inherently sequential, so DataParallel/DDP would add complexity for little gain at this model size — use `--amp` and more DataLoader workers instead.
 
 ## Author
 

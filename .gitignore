@@ -11,3 +11,12 @@ wheels/
 
 # Generated inference output
 output/
+
+# Training artifacts
+data/
+checkpoints/
+wandb/
+kaggle-output/
+
+# env
+.env
